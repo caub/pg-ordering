@@ -146,36 +146,11 @@ CREATE OR REPLACE FUNCTION cat_renormalize(cat_id INTEGER)
   volatile strict
 AS $f$
   BEGIN
-    UPDATE category_member cm SET p=s2.new_rnum, q=2
-      FROM (SELECT thing_id,
-                   is_existing = 0 AS is_new,
-                   -- increase the current value according to the
-                   -- number of adjustment points passed
-                   rnum + 2*(SUM(is_existing)
-                               OVER (ORDER BY rnum))
-                     AS new_rnum
-              FROM (
-                    -- assign the initial simple values to every item
-		    -- in order
-                    SELECT thing_id,
-                           2*(ROW_NUMBER() OVER (ORDER BY p::float8/q)) - 1
-                             AS rnum,
-                           0 AS is_existing
-                      FROM category_member cm2
-                     WHERE cm2.category_id=cat_id
-                    UNION ALL
-                    -- and merge in the adjustment points required to
-                    -- skip over existing x/2 values
-                    SELECT thing_id,
-                           p + 2 - 2*(COUNT(*) OVER (ORDER BY p))
-                             AS rnum,
-                           1 AS is_existing
-                      FROM category_member cm3
-                     WHERE cm3.category_id=cat_id
-                       AND cm3.q=2
-                   ) s1
-           ) s2
-     WHERE s2.thing_id=cm.thing_id
+    UPDATE category_member cm SET p = s2.new_rnum, q = 2 
+      FROM (SELECT thing_id, row_number() OVER (ORDER BY p::float8/q) AS new_rnum 
+              FROM category_member cm2 WHERE cm2.category_id=cat_id
+          ) s2
+      WHERE s2.thing_id=cm.thing_id
        AND s2.is_new
        AND cm.category_id=cat_id;
   END;
