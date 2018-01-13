@@ -24,7 +24,7 @@ AS $f$
     ph INTEGER := 1;
     qh INTEGER := 0;
   BEGIN
-    IF (p1::BIGINT*q2 + 1) <> (p2::BIGINT*q1) THEN
+    IF (p1::BIGINT*q2 + 1) != (p2::BIGINT*q1) THEN
       loop
         p := pl + ph;
         q := ql + qh;
@@ -83,20 +83,20 @@ AS $f$
       p2 := p1; q2 := q1;
       SELECT t2.p, t2.q INTO p1, q1
         FROM _tbl t2
-       WHERE t2.id <> id
-         AND (p::float8/q) < COALESCE(r_rel,'infinity')
+       WHERE t2.id != id
+         AND (p::float8/q) < COALESCE(r_rel, 'infinity')
        ORDER BY (p::float8/q) DESC LIMIT 1;
     ELSE
       SELECT t2.p, t2.q INTO p2, q2
         FROM _tbl t2
-       WHERE t2.id <> id
-         AND (p::float8/q) > COALESCE(r_rel,0)
+       WHERE t2.id != id
+         AND (p::float8/q) > COALESCE(r_rel, 0)
        ORDER BY (p::float8/q) ASC LIMIT 1;
     END IF;
  
     -- compute insert fraction
-    SELECT * INTO np,nq FROM find_intermediate(COALESCE(p1,0),COALESCE(q1,1),
-                                               COALESCE(p2,1),COALESCE(q2,0));
+    SELECT * INTO np,nq FROM find_intermediate(COALESCE(p1,0), COALESCE(q1,1),
+                                               COALESCE(p2,1), COALESCE(q2,0));
  
     -- move or insert the specified row
     UPDATE _tbl t
@@ -131,8 +131,8 @@ AS $f$
     UPDATE _tbl t SET p = s2.new_rnum, q = 2 
       FROM (SELECT row_number() OVER (ORDER BY p::float8/q) AS new_rnum 
               FROM _tbl t2 WHERE t2.id=id
-          ) s2
+      ) s2
       WHERE s2.is_new
-       AND t.id=id;
+        AND t.id=id;
   END;
 $f$;
