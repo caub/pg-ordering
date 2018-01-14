@@ -47,12 +47,12 @@ $f$;
 
 -- assumes the table have the INT columns p and q, with an exclusion contraint (see test)
 
--- insert or move item ID next to REL_ID,
+-- insert or move item _ID next to REL_ID,
 -- before it if IS_BEFORE is true, otherwise after. REL_ID may
 -- be null to indicate a position off the end of the list.
  
 CREATE OR REPLACE FUNCTION place_item(_tbl regclass,
-                                          id INTEGER,
+                                          _id INTEGER,
                                           rel_id INTEGER,
                                           is_before BOOLEAN)
   RETURNS void
@@ -67,13 +67,13 @@ AS $f$
   BEGIN
  
     -- moving a record to its own position is a no-op
-    IF rel_id=id THEN RETURN; END IF;
+    IF rel_id=_id THEN RETURN; END IF;
  
     -- if we're positioning next to a specified row, it must exist
     IF rel_id IS NOT NULL THEN
-      SELECT t.p, t.q INTO strict p1, q1
-        FROM _tbl t
-       WHERE t.id=rel_id;
+      EXECUTE('SELECT t.p, t.q INTO strict p1, q1
+        FROM %I t
+       WHERE t.id=$1', _tbl) USING rel_id;
       r_rel := p1::float8 / q1;
     END IF;
  
@@ -81,17 +81,17 @@ AS $f$
     -- (might not exist).
     IF is_before THEN
       p2 := p1; q2 := q1;
-      SELECT t2.p, t2.q INTO p1, q1
-        FROM _tbl t2
-       WHERE t2.id != id
-         AND (p::float8/q) < COALESCE(r_rel, 'infinity')
-       ORDER BY (p::float8/q) DESC LIMIT 1;
+      EXECUTE('SELECT t2.p, t2.q
+        FROM %I t2
+       WHERE t2.id != $1
+         AND (p::float8/q) < COALESCE(r_rel, ''infinity'')
+       ORDER BY (p::float8/q) DESC LIMIT 1', _tbl) USING _id INTO p1, q1;
     ELSE
-      SELECT t2.p, t2.q INTO p2, q2
-        FROM _tbl t2
-       WHERE t2.id != id
+      EXECUTE('SELECT t2.p, t2.q
+        FROM %I t2
+       WHERE t2.id != $1
          AND (p::float8/q) > COALESCE(r_rel, 0)
-       ORDER BY (p::float8/q) ASC LIMIT 1;
+       ORDER BY (p::float8/q) ASC LIMIT 1', _tbl) USING _id INTO p2, q2;
     END IF;
  
     -- compute insert fraction
@@ -99,10 +99,10 @@ AS $f$
                                                COALESCE(p2,1), COALESCE(q2,0));
  
     -- move or insert the specified row
-    UPDATE _tbl t
-       SET (p,q) = (np,nq) WHERE t.id=id;
+    EXECUTE('UPDATE %I t
+       SET (p,q) = ($2,$3) WHERE t.id=$1', _tbl) USING _id, np, nq;
     IF NOT found THEN
-      INSERT INTO t VALUES (id, np, nq);
+      EXECUTE('INSERT INTO %I VALUES ($1, $2, $3)', _tbl) USING _id, np, nq;
     END IF;
  
     -- want to renormalize both to avoid possibility of integer overflow
@@ -111,7 +111,7 @@ AS $f$
     -- not requiring frequent normalization.
  
     IF (np > 10000000) OR (nq > 10000000) THEN
-      perform renormalize(_tbl, id);
+      perform renormalize(_tbl, _id);
     END IF;
   END;
 $f$;
@@ -122,17 +122,17 @@ $f$;
 -- a new series of values 1/2, 3/2, 5/2, ... to the existing rows,
 -- maintaining the existing order
  
-CREATE OR REPLACE FUNCTION renormalize(_tbl regclass, id INTEGER)
+CREATE OR REPLACE FUNCTION renormalize(_tbl regclass, _id INTEGER)
   RETURNS void
   LANGUAGE plpgsql
   volatile strict
 AS $f$
   BEGIN
-    UPDATE _tbl t SET p = s2.new_rnum, q = 2 
+    EXECUTE format('UPDATE %I t SET p = s2.new_rnum, q = 2 
       FROM (SELECT row_number() OVER (ORDER BY p::float8/q) AS new_rnum 
-              FROM _tbl t2 WHERE t2.id=id
+              FROM %I t2 WHERE t2.id=$1
       ) s2
       WHERE s2.is_new
-        AND t.id=id;
+        AND t.id=$1', _tbl, _tbl) USING _id;
   END;
 $f$;

@@ -14,8 +14,8 @@ CREATE TABLE todo_list (
 INSERT INTO todo_list(text) VALUES ('foo'), ('bar'), ('qux'), ('wat');
 
 
-SELECT place_item(1, NULL, FALSE); -- insert foo at start
-SELECT place_item(2, 1, FALSE); -- insert bar after foo
+SELECT place_item('todo_list', 1, NULL, FALSE); -- insert foo at start
+SELECT place_item('todo_list', 2, 1, FALSE); -- insert bar after foo
 
 SELECT * FROM todo_list;
 
